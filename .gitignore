@@ -1,0 +1,8 @@
+# Downloaded at runtime
+platform-tools/
+*.apk
+# Per-TV backups, change records and screenshots (personal; keep local)
+tvs/
+__pycache__/
+.DS_Store
+Thumbs.db
