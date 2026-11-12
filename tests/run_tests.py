@@ -6,6 +6,7 @@
 Runs in a temporary copy of the tool, so nothing is left in the repo.
 """
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -75,8 +76,11 @@ def main():
     orig = sorted(L("enabled"))
     orig_settings = settings()
 
-    run("--dry-run")
+    dry = run("--dry-run")
     check("dry run changes nothing", sorted(L("enabled")) == orig and settings() == orig_settings)
+    m = re.search(r"(\d+) would be turned off", dry)
+    check("dry run counts what it would turn off", bool(m) and int(m.group(1)) == dry.count("would turn off  "))
+    check("dry run on a new TV would install Projectivy", "would download the latest Projectivy" in dry)
 
     out = run()
     en = set(L("enabled"))
@@ -92,8 +96,18 @@ def main():
     check("screenshots saved", (app / "tvs" / "FAKESERIAL123" / "screens" / "03-after.png").exists())
     check("home-button takeover on", any("ProjectivyAccessibilityService" in l for l in L("settings-secure")))
 
+    check("first run shows home-screen steps", "FINISH THE HOME SCREEN" in out)
+
     out2 = run()
     check("second run makes no new changes", "0 turned off" in out2)
+    check("second run reports settings already set", "already set  limit_ad_tracking: 1" in out2
+          and "1 -> 1" not in out2)
+    check("second run skips home-screen steps", "FINISH THE HOME SCREEN" not in out2
+          and "nothing to finish" in out2)
+
+    dry2 = run("--dry-run")
+    check("dry run sees Projectivy already set up", "Projectivy is already installed" in dry2
+          and "Home-button takeover already on" in dry2 and "would download" not in dry2)
 
     run("--restore")
     check("restore re-enables everything", sorted(p for p in L("enabled") if p != "com.spocky.projengmenu") == orig)
