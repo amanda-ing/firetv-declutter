@@ -36,7 +36,7 @@ import urllib.request
 import zipfile
 from pathlib import Path
 
-VERSION = "1.0.0"
+VERSION = "1.0.1"
 HERE = Path(__file__).resolve().parent
 CONF = HERE / "debloat.conf"
 STATE_ROOT = HERE / "tvs"
@@ -90,6 +90,7 @@ class Tool:
         self.tv = ""
         self.state = None
         self.log = None
+        self.launcher_was_ready = False
 
     # ---------- output and questions ----------
     def say(self, text=""):
@@ -388,6 +389,7 @@ class Tool:
                     continue
                 if self.dry:
                     self.say(f"  would turn off  {p}")
+                    off += 1
                     continue
                 out = self.sh("pm", "disable-user", "--user", "0", p)
                 if "disabled-user" in out:
@@ -399,7 +401,11 @@ class Tool:
                     protected += 1
                 else:
                     self.say(f"  FAIL  {p}: {out.strip().splitlines()[0] if out.strip() else '?'}")
-        self.say(f"  {off} turned off, {protected} protected by Amazon, {skipped} not present.")
+        if self.dry:
+            self.say(f"  {off} would be turned off (some may turn out to be protected by Amazon), "
+                     f"{skipped} already off or not on this TV.")
+        else:
+            self.say(f"  {off} turned off, {protected} protected by Amazon, {skipped} already off or not on this TV.")
 
     def apply_settings(self, plan):
         todo = (PRIVACY_SETTINGS if plan["privacy"] else []) + (SPEED_SETTINGS if plan["speed"] else [])
@@ -409,6 +415,9 @@ class Tool:
         self.say("Changing settings...")
         for ns, key, val in todo:
             old = self.sh1("settings", "get", ns, key)
+            if old == val:
+                self.say(f"  already set  {key}: {val}")
+                continue
             if self.dry:
                 self.say(f"  would set {key}: {old} -> {val}")
                 continue
@@ -421,11 +430,20 @@ class Tool:
             return
         self.say("")
         self.say("Installing the Projectivy home screen...")
+        installed = PROJECTIVY_PKG in self.packages(PROJECTIVY_PKG)
         if self.dry:
-            self.say("  would download the latest Projectivy release from GitHub and turn on its Home-button takeover")
+            if not installed:
+                self.say("  would download the latest Projectivy release from GitHub and install it")
+                self.say("  would turn on its Home-button takeover")
+            else:
+                self.say("  Projectivy is already installed.")
+                if self.projectivy_service() in self.sh1("settings", "get", "secure", "enabled_accessibility_services"):
+                    self.say("  Home-button takeover already on.")
+                else:
+                    self.say("  would turn on its Home-button takeover")
             return
         apk = self.state / "projectivy.apk"
-        if PROJECTIVY_PKG not in self.packages(PROJECTIVY_PKG):
+        if not installed:
             test_apk = os.environ.get("FIRETV_TEST_APK")
             if test_apk:
                 shutil.copyfile(test_apk, apk)
@@ -457,13 +475,11 @@ class Tool:
             self.append("installed-by-tool.txt", PROJECTIVY_PKG)
         else:
             self.say("  Projectivy is already installed.")
-        m = re.search(re.escape(PROJECTIVY_PKG) + r"/[A-Za-z0-9_.]*AccessibilityService", self.sh("dumpsys", "package", PROJECTIVY_PKG))
-        svc = m.group(0) if m else PROJECTIVY_SVC_DEFAULT
-        if "/." in svc:
-            svc = f"{PROJECTIVY_PKG}/{PROJECTIVY_PKG}{svc.split('/', 1)[1]}"
+        svc = self.projectivy_service()
         before = self.sh1("settings", "get", "secure", "enabled_accessibility_services")
         if svc in before:
             self.say("  Home-button takeover already on.")
+            self.launcher_was_ready = installed
         else:
             if not self.changes("accessibility-before.txt").exists():
                 self.changes("accessibility-before.txt").write_text(before + "\n", encoding="utf-8")
@@ -476,6 +492,13 @@ class Tool:
         time.sleep(float(os.environ.get("FIRETV_WAIT", "5")))
         self.screenshot("02-projectivy")
 
+    def projectivy_service(self):
+        m = re.search(re.escape(PROJECTIVY_PKG) + r"/[A-Za-z0-9_.]*AccessibilityService", self.sh("dumpsys", "package", PROJECTIVY_PKG))
+        svc = m.group(0) if m else PROJECTIVY_SVC_DEFAULT
+        if "/." in svc:
+            svc = f"{PROJECTIVY_PKG}/{PROJECTIVY_PKG}{svc.split('/', 1)[1]}"
+        return svc
+
     def finish(self, plan):
         if not self.dry:
             self.sh("input", "keyevent", "KEYCODE_HOME")
@@ -487,7 +510,10 @@ class Tool:
             return
         self.say(f"DONE. Everything changed is recorded in {self.state / 'changes'}")
         self.say("To undo it all: double-click Restore (or run with --restore).")
-        if plan["launcher"]:
+        if plan["launcher"] and self.launcher_was_ready:
+            self.say("")
+            self.say("The Projectivy home screen was already set up, so there is nothing to finish on the TV.")
+        elif plan["launcher"]:
             self.say(FINISH_TEXT)
 
     # ---------- restore ----------

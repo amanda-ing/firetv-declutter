@@ -7,12 +7,13 @@ a dock of your favourite apps and rotating nature wallpapers.
 Everything is **reversible**. Apps are disabled, never uninstalled, and every
 change is recorded so one double-click puts the TV back exactly as it was.
 
-> **Testing status:** every step in this tool was first done by hand on a
-> Toshiba 55C350LU (Fire OS 7.7.1.7) and checked with screenshots from the TV.
-> The packaged tool itself has been tested against a simulated TV, not yet a
-> real one, so try `--dry-run` first. Other Fire OS 7 TVs and sticks should
-> work. Fire OS 6/8 may work. **Vega OS devices are not
-> supported** (they aren't Android). Use at your own risk.
+> **Testing status:** tested on a real Toshiba 55C350LU (Fire OS 7.7.1.7) from
+> Windows 11, with a dry run and then a full run. Every step was also first done
+> by hand on that TV from a Mac and checked with screenshots. On this model
+> Amazon protects four packages (ad deep-linking, device metrics, crash and log
+> managers), so the tool reports and skips them. Other Fire OS 7 TVs and sticks
+> should work. Fire OS 6/8 may work. Try `--dry-run` first on a new device.
+> **Vega OS devices are not supported** (they aren't Android). Use at your own risk.
 
 ## What it does
 
@@ -141,7 +142,8 @@ python3 tests/run_tests.py
 
 This runs the whole flow against a simulated TV (`tests/fake_adb.py`) on any
 OS: Recommended run, re-run, Customize (with an existing accessibility service),
-restore, dry run, and refusing non-Fire OS devices. It works in a temporary
+restore, dry run (including on an already set-up TV), and refusing non-Fire OS
+devices. It works in a temporary
 copy, so nothing is left behind. The GitHub download of Projectivy and real
 network scanning aren't exercised.
 
